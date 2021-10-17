@@ -2,7 +2,7 @@
 ## Title       : Get-SPFarmInfo.ps1
 ## Description : This script will collect information regarding the Farm, Search, and the SSA's in the Farm.
 ## Contributors: Anthony Casillas | Brian Pendergrass | Josh Roark | PG
-## Date        : 04-06-2021
+## Date        : 10-10-2021
 ## Input       : 
 ## Output      : 
 ## Usage       : .\Get-SPFarmInfo.ps1
@@ -21,7 +21,7 @@ Write-Host ""
 Write-Output "If you have more than 1 SSA, then you will be prompted to select the SSA we will be focused on"
 Write-Host ""
 
-$timestamp = $(Get-Date -format "MM-dd-yyyy")
+$timestamp = $(Get-Date -format "MM-dd-yyyy_HH-mm")
 $output = Read-Host "Enter a location for the output file (For Example: C:\Temp)" 
 $outputfilePrefix = $output + "\SPFarmInfo_"
 
@@ -392,6 +392,19 @@ function GetSSAFullObject()
         "WARNING: We have detected that your 'SSA' objects need to be upgraded. In order to perform this action, please run the following command: "
         ""
         "   --- 'Upgrade-SPEnterpriseSearchServiceApplication <your SSA Name>' "
+        ""
+    }
+
+    if($ssa.CloudIndex -eq "True")
+    {
+        $spoProxy = Get-SPServiceApplicationProxy | ?{$_.TypeName -match "SharePoint Online Application Principal Management Service"}
+        $spoTenantUri = $spoProxy.OnlineTenantUri.AbsoluteUri
+        Write-Host ""
+        Write-Host ("    --- We have detected this is a Cloud SSA. Your SPO Tenant is:  $spoTenantUri ") -ForegroundColor Gray
+        Write-Host ""
+
+        ""
+        "    --- We have detected this is a Cloud SSA. Your SPO Tenant is:  $spoTenantUri "
         ""
     }
     
@@ -974,237 +987,12 @@ Function GetAAMs
     }
 }
 
-##########################################
-# SP 2010 Function to get SSA Info
-##########################################
-
-function displaySSAInfo ($global:ssa)
-{
-  $crawlAccount = (New-Object Microsoft.Office.Server.Search.Administration.Content $global:ssa).DefaultGatheringAccount;
-  "###################################################################################### "
-  "  *** " + $global:ssa.Name + " ***" + "  | " + "  (Crawl Account: " + $crawlAccount + ")"
-  "###################################################################################### "
-  $global:ssa.ApplicationName
-  $global:ssa
-  "";
-  "====================================================================================== "
-  "  *** Admin Component (" + $global:ssa.Name + ") ***"
-  "====================================================================================== "
-  $global:ssa.AdminComponent; ""; 
-  foreach ($ct in $global:ssa.CrawlTopologies) {
-    "====================================================================================== "
-    "  *** Crawl Topology (" + $global:ssa.Name + ") ***"
-    "====================================================================================== "
-    $ct; "";
-    foreach ($cc in $ct.CrawlComponents){
-      "---------------------------------------------------------------------------------- "
-      "  *** Crawl Component (" + $cc.Name + ") ***"
-      "---------------------------------------------------------------------------------- "
-      $cc; "";
-	  $farmServerId = $(Get-SPServer $cc.ServerName).Id;
-	  if ($farmServerId -eq $null) {
-		"******************************************************************"
-		"[" + $cc.Name + "] ServerId mismatch found"; 
-		"    - " + $cc.ServerName + " was removed from the farm"
-		"******************************************************************"; "";	  	
-	  } 
-	  else { 
-	  	if ($cc.ServerId -ne $farmServerId) {
-			"******************************************************************"
-			"[" + $cc.Name + "] ServerId mismatch found"; 
-			"    - ServerId Per the Farm: " + $farmServerId 
-			"    - And per the Component: " + $cc.ServerId 
-			"******************************************************************"; "";
-		}
-	  }	
-    }
-  }
-  foreach ($qt in $global:ssa.QueryTopologies){
-    "====================================================================================== "
-    "  *** Query Topology (" + $global:ssa.Name + ") ***"
-    "====================================================================================== "
-    $qt; "";
-    foreach ($qc in $qt.QueryComponents){
-      "---------------------------------------------------------------------------------- "
-      "  *** Query Component (" + $qc.Name + ") ***"
-      "---------------------------------------------------------------------------------- "
-      $qc; "";
-	  $farmServerId = $(Get-SPServer $qc.ServerName).Id;
-	  if ($farmServerId -eq $null) {
-		"******************************************************************"
-		"[" + $qc.Name + "] ServerId mismatch found"; 
-		"    - " + $qc.ServerName + " was removed from the farm"
-		"******************************************************************"; "";	  	
-	  } 
-	  else { 
-	  	if ($qc.ServerId -ne $farmServerId) {
-			"******************************************************************"
-			"[" + $qc.Name + "] ServerId mismatch found"; 
-			"    - ServerId Per the Farm: " + $farmServerId 
-			"    - And per the Component: " + $qc.ServerId 
-			"******************************************************************"; "";
-		}
-	  } 
-    }
-  }; "";
-  
-  #"====================================================================================== "
-  #"  *** Web Service EndPoints (" + $global:ssa.Name + ") ***"
-  #"====================================================================================== "
-  #"" 
-  
-    #VerifyServiceEndpoints
-    #$adminSvc = (Get-SPServiceApplication) | where {$_.DisplayName -like "Search Admin*"+$global:ssa.Name}
-    #$adminSvc.DisplayName; 
-    #"---------------------------------------------------------------------------------- "
-    #foreach ($endPt in $adminSvc.Endpoints) { 
-    #  foreach ($listenUri in $endPt.listenUris) {
-    #    "  Uri: " + $listenUri.AbsoluteUri
-    #  } 
-    #  ""
-    #} 
-    #"";
-    #$global:ssa.Name
-    #"---------------------------------------------------------------------------------- "
-    #foreach ($endPt in $global:ssa.Endpoints) { 
-    #  foreach ($listenUri in $endPt.listenUris) {
-    #    "  Uri: " + $listenUri.AbsoluteUri
-    #  } 
-    #  ""
-    #} 
-  "";
-  "====================================================================================== "
-  "  *** Databases (" + $global:ssa.Name + ") ***"
-  "====================================================================================== "
-  ""
-  "Admin Database" 
-  "---------------------------"
-  $global:ssa.SearchAdminDatabase | select Name, Id, Server, DatabaseConnectionString
-  ""
-  "Crawl Store Database(s)" 
-  "---------------------------"
-  $global:ssa.CrawlStores
-  ""
-  "Property Store Database(s)" 
-  "---------------------------"
-  $global:ssa.PropertyStores
-  ""
-  "====================================================================================== "
-  "  *** Server Name Mappings (" + $global:ssa.Name + ") ***"
-  "====================================================================================== "  
-  $global:ssa | Get-SPEnterpriseSearchCrawlMapping
-
-  "====================================================================================== "
-  "  *** Crawl Rules (" + $global:ssa.Name + ") ***"
-  "====================================================================================== "  
-  $Rules = $global:ssa | Get-SPEnterpriseSearchCrawlRule 
-  if ($Rules.count -lt 20) { $Rules }
-  else {
-    ""
-    "Top 10 (of " + $Rules.count + ") Crawl Rules"
-    "---------------------------------------------"
-    for ($i = 0; $i -le 11; $i++) { $Rules[$i]; }
-  }
-
-  "====================================================================================== "
-  "  *** Content Sources (" + $global:ssa.Name + ") ***"
-  "====================================================================================== "
-  $contentSources = Get-SPEnterpriseSearchCrawlContentSource -SearchApplication $global:ssa;
-  foreach ($contentSrc in $contentSources) {
-    ""
-		"------------------------------------------------------------------------ "
-		$contentSrc.Name + " | ( ID:" + $contentSrc.ID + " TYPE:" + $contentSrc.Type + "  Behavior:" + $contentSrc.SharePointCrawlBehavior + ")"
-		"------------------------------------------------------------------------ "
-    foreach ($startUri in $contentSrc.StartAddresses) { 
-      if ($contentSrc.Type.toString() -ieq "SharePoint") {
-        $spSrc = @{}
-        if ($startUri.Scheme.toString().toLower().startsWith("http")) {
-          $isRemoteFarm = $true ## Assume Remote Farm Until Proven Otherwise ##
-          foreach ($altUrl in Get-SPAlternateUrl) {
-            if ($startUri.AbsoluteUri.toString() -ieq $altUrl.Uri.toString()) {
-              $isRemoteFarm = $false                
-              if ($altUrl.UrlZone -ieq "Default") {
-                "  Start Address: " + $startUri
-                "  AAM Zone: [" + $altUrl.UrlZone + "]" 
-                $inUserPolicy = $false;    #assume crawlAccount not inUserPolicy until verified
-                $webApp = Get-SPWebApplication $startUri.AbsoluteUri;
-                $IIS = $webApp.IisSettings[[Microsoft.SharePoint.Administration.SPUrlZone]::($altUrl.UrlZone)]
-                $isClaimsBased = $true
-                if ($webApp.UseClaimsAuthentication) { 
-                    "  Authentication Type: [Claims]"
-                    if (($IIS.ClaimsAuthenticationProviders).count -eq 1) {
-                       "  Authentication Provider: " + ($IIS.ClaimsAuthenticationProviders[0]).DisplayName
-                    } else {
-                      "  Authentication Providers: "
-                      foreach ($provider in ($IIS.ClaimsAuthenticationProviders)) {
-                        "     - " + $provider.DisplayName
-                      }
-                    }
-                }
-                else {
-                  $isClaimsBased = $false
-                  "  Authentication Type: [Classic]"                  
-                  if ($IIS.DisableKerberos) { "  Authentication Provider: [Windows:NTLM]" }
-                  else { "  Authentication Provider:[Windows:Negotiate]" }
-                }
-                foreach ($userPolicy in $webApp.Policies) {
-                  if($isClaimsBased){
-                   $claimsPrefix = "i:0#.w|" 
-                  }
-                  if ($userPolicy.UserName.toLower().Equals(($claimsPrefix + $crawlAccount).toLower())) {
-                    $inUserPolicy = $true;
-                    "  Web App User Policy: {" + $userPolicy.PolicyRoleBindings.toString() + "}";
-                  }
-                }
-                if (!$inUserPolicy) {
-                  "  ---"  + $crawlAccount + " is NOT defined in the Web App's User Policy !!!";
-                }
-              }
-              else { 
-                "    [" + $altUrl.UrlZone + "] " + $startUri;
-                "  --- Non-Default zone may impact Contextual Scopes (e.g. This Site)" 
-              }
-            }
-          }
-          
-          if($isRemoteFarm)
-          {
-            "  This Start Address is NOT local to the Farm"
-            "  Start Address: " + $startUri
-          } 
-            
-        } 
-        else {
-          if ($startUri.Scheme.toString().toLower().startsWith("sps")) { "  " + $startUri + " [Profile Crawl]" }
-          else {
-            if ($startUri.Scheme.toString().toLower().startsWith("bdc")) { "  URL: " + $startUri + " [BDC Content]" }
-            else { "    -" + $startUri; }
-          }
-        }
-      }
-      else { "  Web Address: " + $startUri; }
-      "  ---------------------------------------------"
-    }
-    ""
-  }
-  $queryString = "SELECT TOP 10 CrawlID,ProjectID,CrawlType,ContentSourceID,Status,SubStatus,Request,StartTime,EndTime FROM MSSCrawlHistory WHERE ( [CrawlID] NOT IN (SELECT [CrawlID] FROM MSSCrawlHistory WHERE ((Status = 11) OR ((Status = 4) AND (SubStatus = 1))))) ORDER BY CrawlID DESC"
-  $dataSet = New-Object System.Data.DataSet "CrawlHistory"
-  if ((New-Object System.Data.SqlClient.SqlDataAdapter($queryString, $global:ssa.SearchAdminDatabase.DatabaseConnectionString)).Fill($dataSet)) {
-    "====================================================================================== "
-    " *** Incomplete Crawl History ***"  
-    "====================================================================================== "
-    $dataSet.Tables[0] | SELECT *
-  }
-  "====================================================================================== "
-  "";
-}
-
 #---added by bspender--------------------------------------------------------------------------------------------------
 # VerifyApplicationServerSyncJobsEnabled: Verify that Application Server Admin Service Timer Jobs are running
 # ---------------------------------------------------------------------------------------------------------------------
 function VerifyApplicationServerSyncJobsEnabled
 {
-    Write-Host "Checking timer job functionality for job:  'job-application-server*'"
+    Write-Host "Checking 'SSP Job Control' Instances and timer job functionality for jobs: 'job-application-server*'"
     ""
 	"###############################################################"
 	" Are these Critical Jobs and Service Instances running..? " 
@@ -1212,6 +1000,52 @@ function VerifyApplicationServerSyncJobsEnabled
     ""
 
     $timeThresholdInMin = 5
+
+    $jobs = Get-SPTimerJob | where {$_.Name -like "job-application-*"}
+    if($jobs.Count -lt 2)
+    {
+        Write-Host ""
+        Write-Warning ("We have detected that one or more critical search related timer jobs are missing from the farm.")
+        "*** We have detected that one or more critical search related timer jobs are missing from the farm. ***"
+        ""
+$jobsText = @"
+
+- A SharePoint Farm should have the following 2 Timer Jobs that are critical to search function.
+
+-- 'job-application-server-admin-service'
+-- 'job-application-server'
+
+- In order to re-create these jobs, please run the following command from the SharePoint Management Shell ( elevated )
+
+-- Install-SPFeature "SharedServices" -Force
+
+
+"@
+
+        $jobsText
+        Write-Host ("$jobsText") -ForegroundColor Gray
+        Write-Host ""
+    }
+    else
+    {
+        Write-Host ("These timer jobs should run every 1 min. Their schedule should not be altered or be anything other than 'every 1 min' ")
+        Write-Host ""
+        
+        "These timer jobs should run every 1 min. Their schedule should not be altered or be anything other than 'every 1 min' "
+        "" 
+        foreach($job in $jobs)
+        {
+            Write-Host(" Name: " + $job.Name)
+            Write-Host(" Schedule: " + $job.Schedule)
+            Write-Host ""
+            
+            "   Name:  " + $job.Name
+            "   Schedule:  " + $job.Schedule
+            ""
+        }
+        " -------------------------------------------------------"
+    }
+
 	
 	$sspJob = $farm.Services | where {$_.TypeName -like "SSP Job Control*"}
 	if ($sspJob.Status -ne "Online")
@@ -1252,38 +1086,48 @@ function VerifyApplicationServerSyncJobsEnabled
         }
 	}
 
-    if ($serverNames.count -eq 1) 
-    {
-		$jobs = Get-SPTimerJob | where {$_.Name -like "job-application-*"}
-    } 
-    else 
-    {
-		$jobs = Get-SPTimerJob | where {$_.Name -eq "job-application-server-admin-service"}
-	}
 
-	foreach ($j in $jobs) { 
+	foreach($j in $jobs)
+    { 
+        ""
 		Write-OutPut ($j.Name)
 		Write-OutPut ("-------------------------------------------------------")
-		if (($j.Status -ne "Online") -or ($j.isDisabled)) { 
-			if ($j.Status -ne "Online") { Write-Warning ($j.Name + " timer job is " + $j.Status) }
-			if ($j.isDisabled) { Write-Warning ($j.Name + " timer job is DISABLED") }
+		if(($j.Status -ne "Online") -or ($j.isDisabled))
+        { 
+			if($j.Status -ne "Online")
+            {
+                Write-Warning ($j.Name + " timer job is " + $j.Status)
+            }
+			if($j.isDisabled)
+            {
+                Write-Warning ($j.Name + " timer job is DISABLED")
+            }
 			$global:ApplicationServerSyncTimerJobsOffline.Add($j) | Out-Null 
 			$global:serviceDegraded = $true
-		} else {
+		}
+        else
+        {
 			$mostRecent = $j.HistoryEntries | select -first ($serverNames.count * $timeThresholdInMin) 
-			foreach ($server in $serverNames) { 
+			foreach ($server in $serverNames)
+            { 
 				$displayShorthand = $server+": "+$($j.Name)
 				$mostRecentOnServer = $mostRecent | Where {$_.ServerName -ieq $server} | SELECT -First 1
-				if ($mostRecentOnServer -eq $null) {
+				if($mostRecentOnServer -eq $null)
+                {
 					Write-Warning ($displayShorthand + " timer job does not appear to be running")
 					#and add this server to the list
 					$global:ApplicationServerSyncNotRunning.Add($displayShorthand) | Out-Null
 					$global:serviceDegraded = $true
-				} else {
+				}
+                else
+                {
 					$spanSinceLastRun = [int]$(New-TimeSpan $mostRecentOnServer.EndTime $(Get-Date).ToUniversalTime()).TotalSeconds
-					if ($spanSinceLastRun -lt ($timeThresholdInMin * 60)) {
+					if($spanSinceLastRun -lt ($timeThresholdInMin * 60))
+                    {
 						Write-OutPut ($displayShorthand + " recently ran " + $spanSinceLastRun + " seconds ago")
-					} else {
+					}
+                    else
+                    {
 						Write-Warning ($displayShorthand + " last ran " + $spanSinceLastRun + " seconds ago")
 						$global:ApplicationServerSyncNotRunning.Add($displayShorthand) | Out-Null
 						$global:serviceDegraded = $true
@@ -2397,37 +2241,12 @@ function GetSPVersion()
     }
     elseIf($farm.BuildVersion.Major -eq 14)
     {
-        $outputfile = $outputfilePrefix + "2010_" + $timestamp +".txt"
-        Write-Output ""
-        Write-Output "We will collect some SharePoint and Search Info and write the output to $outputfile"
-        Write-Output ""
-        GetSSA
-        GetFarmBuild | Out-File $outputfile -Append
-        "" | Out-File $outputfile  -Append
-        Get-Date | Out-File $outputfile -Append
-        GetServersInFarm | ft -auto | Out-File $outputfile -Append
-        GetServiceInstances | ft -auto | Out-File $outputfile -Append
-        GetServiceApplications | ft -auto | Out-File $outputfile -Append
-        CheckTimerServiceInstances | ft -auto | Out-File $outputfile -Append
-        #CheckAdminServiceInstance | Out-File $outputfile -Append
-        "" | Out-File $outputfile  -Append
-        CheckTimerJobHistory | Out-File $outputfile -Append
-        CheckFarmSiteSubscriptions | Out-File $outputfile -Append
-        Out-File $outputfile -Append
-        "" | Out-File $outputfile  -Append
-        VerifyServiceEndpoints | Out-File $outputfile -Append
-        "" | Out-File $outputfile  -Append
-        displaySSAInfo($global:ssa) | ft -auto | Out-File $outputfile -Append
-        "" | Out-File $outputfile -Append
-        "" | Out-File $outputfile -Append
-        displayGlobalSearchService | Out-File $outputfile -Append
-        #GetSSIs | ft -auto | Out-File $outputfile -Append
-        GetAAMs | ft -auto | Out-File $outputfile -Append
-
+        Write-Warning "The support for SharePoint 2010 has ended, please update this farm to a newer version of SharePoint.. Aborting Script"
+        exit
     }
     else
     {
-        "Unsupported Version of SP... aborting script"
+        Write-Warning "Unsupported Version of SP... Aborting script"
         exit
     }
 }
@@ -2443,6 +2262,7 @@ function NoSSA()
     CheckTimerServiceInstances | Out-File $outputfile -Append
     CheckAdminServiceInstance | Out-File $outputfile -Append
     CheckTimerJobHistory | Out-File $outputfile -Append
+    VerifyApplicationServerSyncJobsEnabled | Out-File $outputfile -Append
     #GetSSIs | Out-File $outputfile -Append
     GetAAMs | Out-File $outputfile -Append
     exit
@@ -2482,5 +2302,7 @@ GetSPVersion
 ##             :   - changing the name of the output file and script name to "Get-SPFarmInfo.ps1"
 ## Change log  : 1.9 [acasilla]
 ##             :   - altered GetSSA function to force an interger value for input ( if they have multiple SSAs)"
+## Change log  : 1.10 [acasilla]
+##             :   - Removed Sp 2010 functions since its no longer supported"
 ## =====================================================================
 #>
