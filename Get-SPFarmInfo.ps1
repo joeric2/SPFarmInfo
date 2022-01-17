@@ -2,7 +2,7 @@
 ## Title       : Get-SPFarmInfo.ps1
 ## Description : This script will collect information regarding the Farm, Search, and the SSA's in the Farm.
 ## Contributors: Anthony Casillas | Brian Pendergrass | Josh Roark | PG
-## Date        : 10-10-2021
+## Date        :  01-16-2022
 ## Input       : 
 ## Output      : 
 ## Usage       : .\Get-SPFarmInfo.ps1
@@ -28,6 +28,7 @@ $outputfilePrefix = $output + "\SPFarmInfo_"
 $global:farm = Get-SPFarm
 $global:servers = Get-SPServer | Sort-Object -Property DisplayName, Role
 $global:serviceInstances = Get-SPServiceInstance -All | Sort-Object -Property Server, TypeName
+$configDb = Get-SPDatabase | ?{$_.TypeName -match "Configuration Database"}
 $spProduct = Get-SPProduct
 
 Function WriteErrorAndExit($errorText)
@@ -92,9 +93,12 @@ function GetSSA
 Function GetFarmBuild()
 {
     Write-Host "Getting SP Farm Build"
-    ""
+    Write-Host ""
     "[ SharePoint Farm Build: " + $farm.BuildVersion + " ]"
     ""
+    "ConfigDB:        " + $configDb.Name
+    "ConfigDbID:     " + $configDb.Id
+    "SQL Server:      " + $configDb.Server.Address
 }
 
 #-----------------------------------------------
@@ -263,7 +267,7 @@ function CheckTimerJobHistory()
     $conn = New-Object System.Data.SqlClient.SqlConnection
     $cmd = New-Object System.Data.SqlClient.SqlCommand
     
-    $configDb = Get-SPDatabase | ?{$_.TypeName -match "Configuration Database"}
+   
     $connectionString = $configDb.DatabaseConnectionString
     $conn.ConnectionString = $connectionString
     $conn.Open()
@@ -2182,7 +2186,15 @@ function GetSPVersion()
     {
         if($farm.BuildVersion.Major -eq 16)
         {
-            if($farm.BuildVersion.Build -gt 10000)
+            if($farm.BuildVersion.Build -ge 14326)
+            {
+                $is2016 = $true
+                $outputfile = $outputfilePrefix + "SSSE_" + $timestamp +".txt"
+                Write-Output ""
+                Write-Output "We will collect some SharePoint and Search Info and write the output to $outputfile"
+                Write-Output ""
+            }
+            elseif($farm.BuildVersion.Build -ge 10337 -and $farm.BuildVersion.Build -lt 14300)
             {
                 $is2016 = $true
                 $outputfile = $outputfilePrefix + "2019_" + $timestamp +".txt"
@@ -2209,9 +2221,8 @@ function GetSPVersion()
         }
 
         GetSSA
-        GetFarmBuild | Out-File $outputfile -Append
-        "" | Out-File $outputfile  -Append
         Get-Date | Out-File $outputfile -Append
+        GetFarmBuild | Out-File $outputfile -Append
         GetServersInFarm |  ft -auto | Out-File $outputfile -Append
         GetServiceInstances | Out-File $outputfile -Append
         GetServiceApplications | Out-File $outputfile -Append
@@ -2253,9 +2264,8 @@ function GetSPVersion()
 
 function NoSSA()
 {
-    GetFarmBuild | Out-File $outputfile -Append
-    "" | Out-File $outputfile  -Append
     Get-Date | Out-File $outputfile -Append
+    GetFarmBuild | Out-File $outputfile -Append
     GetServersInFarm |  ft -auto | Out-File $outputfile -Append
     GetServiceInstances | Out-File $outputfile -Append
     GetServiceApplications | Out-File $outputfile -Append
