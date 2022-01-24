@@ -2,7 +2,7 @@
 ## Title       : Get-SPFarmInfo.ps1
 ## Description : This script will collect information regarding the Farm, Search, and the SSA's in the Farm.
 ## Contributors: Anthony Casillas | Brian Pendergrass | Josh Roark | PG
-## Date        :  01-16-2022
+## Date        :  01-23-2022
 ## Input       : 
 ## Output      : 
 ## Usage       : .\Get-SPFarmInfo.ps1
@@ -28,8 +28,11 @@ $outputfilePrefix = $output + "\SPFarmInfo_"
 $global:farm = Get-SPFarm
 $global:servers = Get-SPServer | Sort-Object -Property DisplayName, Role
 $global:serviceInstances = Get-SPServiceInstance -All | Sort-Object -Property Server, TypeName
+$webApps = Get-SPWebApplication -IncludeCentralAdministration
 $configDb = Get-SPDatabase | ?{$_.TypeName -match "Configuration Database"}
 $spProduct = Get-SPProduct
+$buildVersion = [string]$global:farm.BuildVersion.Major + "." + [string]$global:farm.BuildVersion.Minor
+$spInstallPath = (Get-Item "HKLM:\SOFTWARE\Microsoft\Shared Tools\Web Server Extensions\$buildVersion\").GetValue("Location")  
 
 Function WriteErrorAndExit($errorText)
 {
@@ -967,28 +970,76 @@ Function GetSSIs
 }
 
 #-----------------------------------------------
-# Alternate Access Mappings
+# Web App, IIS Settings and AAM Info
 #-----------------------------------------------
-Function GetAAMs
+function GetWebAppAndAamInfo()
 {
-    Write-Host "Getting Alternate Access Mappings"
-    ""
-	"###############################################################"
-	" Alternate Access Mappings" 
-	"###############################################################"
-    ""
-    "  IncomingUrl  --  Zone  --  PublicUrl "
-     ""
-     foreach($altUrl in $farm.AlternateUrlCollections)
-    {
-    
-        ""
-        "----------------------------------------------"
-        $altUrl.Name
-        "----------------------------------------------"
+Write-Host "Grabbing Web App, IIS Settings, and AAM information.."
+""
+""
+"#########################################################################################"
+"   WebApp, IIS Settings and AAM Information "
+"#########################################################################################"
 
-        $altUrl | %{$_.incomingUrl + " -- " + $_.Zone + " -- " + $_.PublicUrl}
+foreach($webApp in $webApps)
+{
+    "==================================================="
+    $webApp.DisplayName + "   ||   DB Count: " + $webApp.ContentDatabases.Count
+    "==================================================="
+
+    " ------------------------------------------------------------------------"
+    "  Alternate Access Mappings "
+    " ------------------------------------------------------------------------"
+     $webApp.AlternateUrls
+    ""
+    foreach($altUrl in $webApp.AlternateUrls)
+    {
+        $iis = $webApp.IisSettings[[Microsoft.SharePoint.Administration.SPUrlZone]::($altUrl.UrlZone)]
+
+        if($null -eq $iis)
+        {
+           "------------------------------------------------------------------------"
+           " No backing IIS Site"
+           "------------------------------------------------------------------------"
+           $altUrl.PublicUrl + " on " + $altUrl.Zone + "  zone, does not have a backing IIS site"
+           ""
+        }
+        else
+        {
+            "------------------------------------------------------------------------"
+            " IIS Settings - " + $altUrl.UrlZone
+            "------------------------------------------------------------------------"
+            $iis
+            "------------------------------------------------------------------------"
+            " IIS Bindings - " + $altUrl.UrlZone
+            "------------------------------------------------------------------------"
+            $iis.ServerBindings
+            $iis.SecureBindings
+        }
     }
+    Write-Host " - Checking to see if 'side-by-side' is configured for WebApp:  "  $webApp.Url
+    $sbsEnabled = $webapp.WebService.EnableSideBySide
+    if($sbsEnabled)
+    {
+        "------------------------------------------------------------------------"
+        " Side-by-side has been enabled "
+        "------------------------------------------------------------------------"
+        ""
+        $sbsToken = $webapp.WebService.SideBySideToken
+        "side-by-side Token:   " + $sbsToken
+        ""
+        "__________________________________________________"
+        "  side by side folders"
+        "__________________________________________________"
+        $layoutsPath = $spInstallPath + "TEMPLATE\LAYOUTS"
+        $buildFilter = $global:farm.BuildVersion.Major.ToString() + "*"
+        Get-ChildItem -Path $layoutsPath -Filter $buildFilter
+    }
+    else
+    {
+        Write-Host (" -- Side-by-side is not configured for webApp:   " + $webApp.Url) -ForegroundColor Gray
+    }
+  }
 }
 
 #---added by bspender--------------------------------------------------------------------------------------------------
@@ -2243,7 +2294,7 @@ function GetSPVersion()
         GetSSIs | Out-File $outputfile -Append
         GetSQSS | Out-File $outputfile -Append
         VerifyServiceEndpoints | Out-File $outputfile -Append
-        GetAAMs | Out-File $outputfile -Append
+        GetWebAppAndAamInfo | Out-File $outputfile -Append
         VerifyApplicationServerSyncJobsEnabled | Out-File $outputfile -Append
         HealthCheck | Out-File $outputfile -Append
         ""
@@ -2274,7 +2325,7 @@ function NoSSA()
     CheckTimerJobHistory | Out-File $outputfile -Append
     VerifyApplicationServerSyncJobsEnabled | Out-File $outputfile -Append
     #GetSSIs | Out-File $outputfile -Append
-    GetAAMs | Out-File $outputfile -Append
+    GetWebAppAndAamInfo | Out-File $outputfile -Append
     exit
 }
 
@@ -2314,5 +2365,7 @@ GetSPVersion
 ##             :   - altered GetSSA function to force an interger value for input ( if they have multiple SSAs)"
 ## Change log  : 1.10 [acasilla]
 ##             :   - Removed Sp 2010 functions since its no longer supported"
+## Change log  : 1.11 [acasilla]
+##             :   - added functionality to grab more web app\aam info"
 ## =====================================================================
 #>
