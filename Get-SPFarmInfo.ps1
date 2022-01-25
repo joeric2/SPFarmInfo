@@ -992,8 +992,9 @@ foreach($webApp in $webApps)
     " ------------------------------------------------------------------------"
      $webApp.AlternateUrls
     ""
-    foreach($altUrl in $webApp.AlternateUrls)
+    foreach($altUrl in $webApp.AlternateUrls | Sort-Object -Unique -Property Zone)
     {
+        
         $iis = $webApp.IisSettings[[Microsoft.SharePoint.Administration.SPUrlZone]::($altUrl.UrlZone)]
 
         if($null -eq $iis)
