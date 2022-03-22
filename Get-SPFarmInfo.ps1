@@ -99,11 +99,21 @@ Function GetFarmBuild()
 {
     Write-Host "Getting SP Farm Build"
     Write-Host ""
-    "[ SharePoint Farm Build: " + $farm.BuildVersion + " ]"
-    ""
-    "ConfigDB:        " + $configDb.Name
-    "ConfigDbID:     " + $configDb.Id
-    "SQL Server:      " + $configDb.Server.Address
+    $farmBuildVersion = $farm.BuildVersion
+    $configDbName = $configDb.Name
+    $configDbId = $configDb.Id
+    $configDbSql = $configDb.Server.Address
+
+$farmBuildTxt = @"
+    [ SharePoint Farm Build: $farmBuildVersion ]
+    
+    ConfigDB:        $configDbName
+    ConfigDbID:      $configDbId
+    SQL Server:      $configDbSql
+"@
+    Write-Host $farmBuildTxt -ForegroundColor Cyan
+    $farmBuildTxt
+
 }
 
 #-----------------------------------------------
@@ -111,6 +121,7 @@ Function GetFarmBuild()
 #-----------------------------------------------
 function GetServersInFarm()
 {
+    Write-Host ""
     Write-Host "Getting Servers in the Farm"
     Write-Host ""
     ""
@@ -129,7 +140,7 @@ function GetServersInFarm()
             $svr.DisplayName + " || " + $svr.Id + " || " + $svr.Role + " || " + $svr.Status + " || " + $productStatus + " || " + $timeZone
             if($productStatus -eq "UpgradeBlocked" -or $productStatus -eq "InstallRequired" -or $productStatus -eq "UpgradeInProgress")
             {
-                $message = "'" + $productStatus.ToString() + "'" + " has been detected on server: " + $svr.DisplayName + ". This puts the farm\server in an 'UNSUPPORTED' and unstable state and patching\psconfig needs to be completed before any further troubleshooting"
+                $message = "'" + $productStatus.ToString() + "'" + " has been detected on server: " + $svr.DisplayName + ". This puts the farm\server in an 'UNSUPPORTED' and unstable state and patching\psconfig needs to be completed before any further troubleshooting. Support cannot provided until this is resolved"
                 Write-Warning -Message $message
                 $productStatusBool = $true
             }
@@ -144,7 +155,7 @@ function GetServersInFarm()
     {
         ""
         ""
-        " ** WARNING: We have detected that some servers are in an 'UpgradeBlocked\InstallRequired\UpgradeInProgress' state. This puts the farm\server in an 'UNSUPPORTED' and unstable state and patching\psconfig needs to be completed before any further troubleshooting! ** "
+        " ** WARNING: We have detected that some servers are in an 'UpgradeBlocked\InstallRequired\UpgradeInProgress' state. This puts the farm\server in an 'UNSUPPORTED' and unstable state and patching\psconfig needs to be completed before any further troubleshooting. Support cannot provided until this is resolved! ** "
     }
     ""
 }
