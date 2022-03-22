@@ -2,7 +2,7 @@
 ## Title       : Get-SPFarmInfo.ps1
 ## Description : This script will collect information regarding the Farm, Search, and the SSA's in the Farm.
 ## Contributors: Anthony Casillas | Brian Pendergrass | Josh Roark | PG
-## Date        :  01-23-2022
+## Date        :  03-22-2022
 ## Input       : 
 ## Output      : 
 ## Usage       : .\Get-SPFarmInfo.ps1
@@ -14,11 +14,13 @@
 Add-PSSnapin Microsoft.SharePoint.PowerShell -ErrorAction SilentlyContinue
 Import-Module WebAdministration -ErrorAction SilentlyContinue
 
-Write-Output "This script can take several mins to run."
 Write-Host ""
-Write-Output "If you have a single SSA or no SSA in your Farm, this will move along with no interaction"
 Write-Host ""
-Write-Output "If you have more than 1 SSA, then you will be prompted to select the SSA we will be focused on"
+Write-Host "This script can take several mins to run." -ForegroundColor Green
+Write-Host ""
+Write-Host "If you have a single SSA or no SSA in your Farm, this will move along with no interaction"
+Write-Host ""
+Write-Host "If you have more than 1 SSA, then you will be prompted to select the SSA we will be focused on"
 Write-Host ""
 
 $timestamp = $(Get-Date -format "MM-dd-yyyy_HH-mm")
@@ -110,27 +112,39 @@ Function GetFarmBuild()
 function GetServersInFarm()
 {
     Write-Host "Getting Servers in the Farm"
+    Write-Host ""
     ""
     "#########################################################################################"
     "   Servers in the Farm "
     "#########################################################################################"
-
+    ""
     foreach($svr in $global:servers)
     {
         if($svr.Role -ne "Invalid")
         {
             $productStatus = $null
-            $productStatus = $spProduct.GetStatus($svr.DisplayName)
-            $timeZone = $(Get-WMIObject -Class Win32_TimeZone -Computer $svr.address -ErrorAction SilentlyContinue).Description
+            $productStatus = $spProduct.GetStatus($svr.DisplayName) | select -Unique
+
+            $timeZone = $(Get-WMIObject -Class Win32_TimeZone -Computer $svr.DisplayName -ErrorAction SilentlyContinue).Description
             $svr.DisplayName + " || " + $svr.Id + " || " + $svr.Role + " || " + $svr.Status + " || " + $productStatus + " || " + $timeZone
+            if($productStatus -eq "UpgradeBlocked" -or $productStatus -eq "InstallRequired" -or $productStatus -eq "UpgradeInProgress")
+            {
+                $message = "'" + $productStatus.ToString() + "'" + " has been detected on server: " + $svr.DisplayName + ". This puts the farm\server in an 'UNSUPPORTED' and unstable state and patching\psconfig needs to be completed before any further troubleshooting"
+                Write-Warning -Message $message
+                $productStatusBool = $true
+            }
         }
         else
         {
             $timeZone = $(Get-WMIObject -Class Win32_TimeZone -Computer $svr.address -ErrorAction SilentlyContinue).Description
             $svr.DisplayName + " || " + $svr.Id + " || " + $svr.Role + " || " + $svr.Status + " || " + $timeZone
         }
-
-        
+    }
+    if($productStatusBool)
+    {
+        ""
+        ""
+        " ** WARNING: We have detected that some servers are in an 'UpgradeBlocked\InstallRequired\UpgradeInProgress' state. This puts the farm\server in an 'UNSUPPORTED' and unstable state and patching\psconfig needs to be completed before any further troubleshooting! ** "
     }
     ""
 }
@@ -140,7 +154,9 @@ function GetServersInFarm()
 #-----------------------------------------------
 function GetServiceInstances()
 {
+    Write-Host ""
     Write-Host "Getting Service Instances Information"
+    Write-Host ""
     ""
     "#########################################################################################"
     "   What Service Instances are running and on what Server? "
@@ -160,6 +176,7 @@ function GetServiceInstances()
 function GetServiceApplications()
 {
    Write-Host "Getting Service Application Information that are in a state other than 'Disabled'"
+   Write-Host ""
     ""
     "#########################################################################################"
     "  Service Application Info " 
@@ -180,7 +197,7 @@ function GetServiceApplications()
 function CheckTimerServiceInstances()
 {
     
-    Write-Host "Checking Timer Service Instances at the Farm Level. Disabled Service Instances can prevent timer jobs from executing...`n"
+    Write-Host "Checking 'Timer Service Instances' at the Farm Level. Disabled Service Instances will prevent timer jobs from executing...`n"
     ""
     "#########################################################################################"
     "  'Farm Level Timer Service Instances' Check "
@@ -209,14 +226,14 @@ function CheckTimerServiceInstances()
     } 
     else
     {
-        Write-Host ("   All Timer Service Instances in the farm are online. No problems found!") -ForegroundColor Green
+        Write-Host ("   All Timer Service Instances in the farm are online!") -ForegroundColor Green
      }
 }
 
 function CheckAdminServiceInstance()
 {
     Write-Host ""
-    Write-host "Now checking SharePoint ADMINISTRATION Service Instances...`n"
+    Write-host "Checking SharePoint 'Administration' Service Instances. Disabled Service Instances can prevent timer jobs from executing...`n"
     ""
     "#########################################################################################"
     "  'Administration Service Instances' - Check "
@@ -243,7 +260,7 @@ function CheckAdminServiceInstance()
     }
     if($adminSiAllGood)
     {
-        Write-Host "   All Administration Service Instances in the farm are online. No problems found with SPAdminV4" -ForegroundColor Green
+        Write-Host "   All Administration Service Instances in the farm are online!" -ForegroundColor Green
     }
 }
 #End Script
@@ -254,13 +271,17 @@ function CheckAdminServiceInstance()
 
 function CheckTimerJobHistory()
 {
-    Write-Host ""
-    Write-Host "Checking the size of the 'timerjobhistory' table... "
-    Write-Host ""
-    Write-Host " --If there are millions of rows in this table, this can prevent jobs from running or cause timer jobs to time out. "
-    Write-Host " --- As of April 2018 CU, for SP 2013 and 2016, there were changes implemented to limit the timer job history to 3 days"
-    Write-Host " ---- https://blogs.technet.microsoft.com/stefan_gossner/2018/04/12/changes-in-the-timerjobhistory-table-maintenance-introduced-in-april-2018-cu-for-sharepoint-2013/"
-    Write-Host ""
+
+Write-Host ""
+Write-host "Checking the size of the 'timerjobhistory' table. "
+
+$tjhText = @'
+--If there are millions of rows in this table, this can prevent jobs from running or cause timer jobs to time out. "
+--- As of April 2018 CU, for SP 2013 and 2016, there were changes implemented to limit the timer job history to 3 days"
+---- https://blogs.technet.microsoft.com/stefan_gossner/2018/04/12/changes-in-the-timerjobhistory-table-maintenance-introduced-in-april-2018-cu-for-sharepoint-2013/"
+'@
+Write-Host ("$tjhText") -ForegroundColor Gray
+Write-Host ""
 
     ""
     "#########################################################################################"
@@ -287,7 +308,7 @@ function CheckTimerJobHistory()
                 {
                 while($rows.Read())
                             {
-                                Write-Host("TimerJobHistory table contains: " + $rows[0]  + " rows")
+                                Write-Host("      TimerJobHistory table contains: " + $rows[0]  + " rows") -ForegroundColor Cyan
                                 Write-Host ""
                                 ""
                                 "TimerJobHistory table contains: " + $rows[0]  + " rows"
@@ -335,7 +356,7 @@ function CheckFarmSiteSubscriptions
     }
     else
     {
-        Write-Host " -- No Site Subscriptions detected"
+        Write-Host " -- No Site Subscriptions detected" -ForegroundColor Green
         "#########################################################################################"
         "   Site Subscription Info "
         "#########################################################################################"
@@ -362,6 +383,7 @@ $tjText = @"
     -- SP 2013 should have 7 timer jobs
     -- SP 2016 should have 8 timer jobs
     -- SP 2019 should have 9 jobs
+    -- SP SE should have 9 jobs
 
     - If there are any less than these ( respective of the SP Version), then the easiest course of action to get those timer jobs back in place would be to run: ( insert correct SSA name and remove space between $ and ssa )
     -- $ ssa = Get-SPEnterpriseSearchServiceApplication <your ssa name here>
@@ -543,10 +565,10 @@ function checkIfPartitioned
    }
    else
    {
-    Write-Host -ForegroundColor Green "   Your Search Proxy 'Properties' are set to expected values."
+    Write-Host -ForegroundColor Green "   Your Search Proxy 'Properties' is set to $ssaProxyPropertiesProperty"
     Write-Host ""
     ""
-    "    Your Search Proxy 'Properties' are set to expected values."
+    "    Your Search Proxy 'Properties' is set to $ssaProxyPropertiesProperty"
     ""
    }
 
@@ -558,10 +580,10 @@ function checkIfPartitioned
    }
    else
    {
-    Write-Host -ForegroundColor Green "   Your SSA 'Properties' are set to expected values."
+    Write-Host -ForegroundColor Green "   Your SSA 'Properties' is set to $ssaPropertiesProperty"
     Write-Host ""
     ""
-    "    Your SSA 'Properties' are set to expected values."
+    "    Your SSA 'Properties' is set to $ssaPropertiesProperty "
     ""
    }
 
@@ -573,6 +595,7 @@ function checkIfPartitioned
 function GetSSALegacyAdminComponent()
 {
     Write-Host "Getting Legacy Admin Component Info"
+    Write-Host ""
     ""
     " -------------------------------------------------------------------"
     "   Legacy Admin Component"
@@ -634,6 +657,7 @@ function CheckCpcFromMssConfiguration
 function GetSearchTopo()
 {
     Write-Host "Getting Search Topology Info"
+    Write-Host ""
     ""
     
     $activeTopo = Get-SPEnterpriseSearchTopology -SearchApplication $global:ssa -Active
@@ -650,6 +674,7 @@ function GetSearchTopo()
 Function GetContentSources()
 {
     Write-Host "Collecting Content Source Info"
+    Write-Host ""
     ""
     
       $crawlAccount = (New-Object Microsoft.Office.Server.Search.Administration.Content $global:ssa).DefaultGatheringAccount
@@ -758,6 +783,7 @@ Function GetContentSources()
 function GetServerNameMappings()
 {
     Write-Host "Getting Server Name Mappings"
+    Write-Host ""
     ""
     "#########################################################################################"
     "  *** Server Name Mappings (" + $global:ssa.Name + ") ***"
@@ -773,14 +799,15 @@ function GetServerNameMappings()
 #-----------------------------------------------
 function GetCrawlRules()
 {
-    Write-Host "Getting first 20 Crawl Rules"
+    Write-Host "Getting first 10 Crawl Rules"
+    Write-Host ""
     ""
     "#########################################################################################"
     "  *** Crawl Rules (" + $global:ssa.Name + ") ***"
     "#########################################################################################"
     ""
     $Rules = $global:ssa | Get-SPEnterpriseSearchCrawlRule 
-    if ($Rules.count -lt 20) { $Rules }
+    if ($Rules.count -lt 10) { $Rules }
     else 
     {
     ""
@@ -806,6 +833,7 @@ $searchServiceObjText = @"
 -- $ searchServiceObj.Update()
 "@
     Write-Host "Getting Search Service Info"
+    Write-Host ""
     ""
     "#########################################################################################"
     "  Search Service "
@@ -837,6 +865,7 @@ $searchServiceObjText = @"
 Function GetSQSS()
 {
     Write-Host "Getting SQSS Information"
+    Write-Host ""
     ""
     "#########################################################################################"
     "  Search Query and Site Settings (SQSS) - These should Only be running on your QPCs"
@@ -859,6 +888,7 @@ Function GetSQSS()
 function VerifyServiceEndpoints
 {
     Write-Host "Checking to see if the Search EndPoints are accessible.."
+    Write-Host ""
     ""
      "#########################################################################################"
      "   " + $global:ssa.Name + " - EndPoint Verification " 
@@ -918,6 +948,7 @@ Function GetSSIs
 {
 
     Write-Host "Getting Search Service Instances Info"
+    Write-Host ""
     ""
     "#########################################################################################"
     "  Are there any Disabled Search Instances..? "
@@ -975,6 +1006,7 @@ Function GetSSIs
 function GetWebAppAndAamInfo()
 {
 Write-Host "Grabbing Web App, IIS Settings, and AAM information.."
+Write-Host ""
 ""
 ""
 "#########################################################################################"
@@ -1018,7 +1050,9 @@ foreach($webApp in $webApps)
             $iis.SecureBindings
         }
     }
+    Write-Host ""
     Write-Host " - Checking to see if 'side-by-side' is configured for WebApp:  "  $webApp.Url
+    Write-Host ""
     $sbsEnabled = $webapp.WebService.EnableSideBySide
     if($sbsEnabled)
     {
@@ -1038,7 +1072,7 @@ foreach($webApp in $webApps)
     }
     else
     {
-        Write-Host (" -- Side-by-side is not configured for webApp:   " + $webApp.Url) -ForegroundColor Gray
+        Write-Host ("  -- Side-by-side is not configured for webApp:   " + $webApp.Url) -ForegroundColor Gray
     }
   }
 }
@@ -1048,7 +1082,9 @@ foreach($webApp in $webApps)
 # ---------------------------------------------------------------------------------------------------------------------
 function VerifyApplicationServerSyncJobsEnabled
 {
+    Write-Host ""
     Write-Host "Checking 'SSP Job Control' Instances and timer job functionality for jobs: 'job-application-server*'"
+    Write-Host ""
     ""
 	"###############################################################"
 	" Are these Critical Jobs and Service Instances running..? " 
@@ -1084,15 +1120,15 @@ $jobsText = @"
     }
     else
     {
-        Write-Host ("These timer jobs should run every 1 min. Their schedule should not be altered or be anything other than 'every 1 min' ")
+        Write-Host (" --These timer jobs should run every 1 min. Their schedule should not be altered or be anything other than 'every 1 min' ") -ForegroundColor Gray
         Write-Host ""
         
         "These timer jobs should run every 1 min. Their schedule should not be altered or be anything other than 'every 1 min' "
         "" 
         foreach($job in $jobs)
         {
-            Write-Host(" Name: " + $job.Name)
-            Write-Host(" Schedule: " + $job.Schedule)
+            Write-Host(" Name: " + $job.Name) -ForegroundColor Cyan
+            Write-Host(" Schedule: " + $job.Schedule) -ForegroundColor Cyan
             Write-Host ""
             
             "   Name:  " + $job.Name
@@ -2241,12 +2277,12 @@ function GetSPVersion()
             if($farm.BuildVersion.Build -ge 14326)
             {
                 $is2016 = $true
-                $outputfile = $outputfilePrefix + "SSSE_" + $timestamp +".txt"
+                $outputfile = $outputfilePrefix + "SPSE_" + $timestamp +".txt"
                 Write-Output ""
                 Write-Output "We will collect some SharePoint and Search Info and write the output to $outputfile"
                 Write-Output ""
             }
-            elseif($farm.BuildVersion.Build -ge 10337 -and $farm.BuildVersion.Build -lt 14300)
+            elseif($farm.BuildVersion.Build -ge 10337 -and $farm.BuildVersion.Build -lt 14320)
             {
                 $is2016 = $true
                 $outputfile = $outputfilePrefix + "2019_" + $timestamp +".txt"
@@ -2299,7 +2335,7 @@ function GetSPVersion()
         VerifyApplicationServerSyncJobsEnabled | Out-File $outputfile -Append
         HealthCheck | Out-File $outputfile -Append
         ""
-        Write-Host("The script is complete. Please send the file, $outputfile, to Microsoft support") -ForegroundColor Green
+        Write-Host(" -- The script is complete. Please send the file, $outputfile, to Microsoft support") -ForegroundColor Green
 
     }
     elseIf($farm.BuildVersion.Major -eq 14)
@@ -2367,6 +2403,8 @@ GetSPVersion
 ## Change log  : 1.10 [acasilla]
 ##             :   - Removed Sp 2010 functions since its no longer supported"
 ## Change log  : 1.11 [acasilla]
+##             :   - wrote 'Warning' if servers are in unstable state" 
 ##             :   - added functionality to grab more web app\aam info"
+##             :   - changed formatting"
 ## =====================================================================
 #>
