@@ -142,6 +142,7 @@ function GetServersInFarm()
             {
                 $message = "'" + $productStatus.ToString() + "'" + " has been detected on server: " + $svr.DisplayName + ". This puts the farm\server in an 'UNSUPPORTED' and unstable state and patching\psconfig needs to be completed before any further troubleshooting. Support cannot provided until this is resolved"
                 Write-Warning -Message $message
+                Write-Host ""
                 $productStatusBool = $true
             }
         }
@@ -291,6 +292,7 @@ $tjhText = @'
 --- As of April 2018 CU, for SP 2013 and 2016, there were changes implemented to limit the timer job history to 3 days"
 ---- https://blogs.technet.microsoft.com/stefan_gossner/2018/04/12/changes-in-the-timerjobhistory-table-maintenance-introduced-in-april-2018-cu-for-sharepoint-2013/"
 '@
+Write-Host ""
 Write-Host ("$tjhText") -ForegroundColor Gray
 Write-Host ""
 
@@ -403,6 +405,7 @@ $tjText = @"
     -- $ ssa.Provision()
 "@
 $tjText
+Write-Host ""
 Write-Host ("$tjText") -ForegroundColor Gray
 Write-Host ""
 
