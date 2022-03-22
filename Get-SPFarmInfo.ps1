@@ -4,7 +4,7 @@
 ## Contributors: Anthony Casillas | Brian Pendergrass | Josh Roark | PG
 ## Date        :  03-22-2022
 ## Input       : 
-## Output      : 
+## Output      : foo
 ## Usage       : .\Get-SPFarmInfo.ps1
 ## Notes       : Scroll to bottom for change notes...
 ## Tag         : Search, Sharepoint, Powershell
