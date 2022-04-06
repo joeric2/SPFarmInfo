@@ -679,7 +679,7 @@ function GetSearchTopo()
     " Search Topology ( ID: " + $global:ssa.ActiveTopology.TopologyId.Guid.ToString() + " ) for: " + "( " + $global:ssa.Name + " )"
     "#################################################################################################################"
     
-    Get-SPEnterpriseSearchComponent -SearchTopology $activeTopo | Select * | Sort  -Property Name
+    Get-SPEnterpriseSearchComponent -SearchTopology $activeTopo | Select-Object ServerName, Name, ServerId, ComponentId, RootDirectory, IndexPartitionOrdinal | Format-Table
 }
 
 #-----------------------------------------------
