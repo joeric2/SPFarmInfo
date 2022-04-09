@@ -172,8 +172,10 @@ function Write-DiagnosticReport
     </style>
 "@
 
-    $html = "<!DOCTYPE html><head><Title=`"SPFarmReport`" /></head><body>"
+    $html = "<!DOCTYPE html><head><Title>SPFarmReport</Title></head><body>"
     $html+=$globalCss
+    $html+="<h1>SPFarmReport</h1>"
+    $html+="<div style=`"font-style: italic;`">Collected at {0} UTC</div>" -f [datetime]::UtcNow.ToString("MM dd yyyy hh:mm:ss tt")
     
     foreach($finding in $Findings)
     {
